@@ -1,0 +1,61 @@
+# E-Commerce Dashboard
+
+## Overview
+
+This project is an interactive E-Commerce Dashboard designed to visualize and manage sales, orders, and customer data. It features charts, tables, and filters for easy navigation and analysis.
+
+## Live Demo
+
+A live version of the dashboard is hosted here: [Your Live Demo Link](https://your-demo-link.com)
+
+## Features
+
+- Visualize sales, orders, and customer metrics
+- Interactive charts and tables
+- Sample data included for demonstration
+
+## Setup Instructions
+
+1. **Clone the Repository**
+
+    ```bash
+    git clone https://github.com/Rakesh539704e/ecommerce-dashboard.git
+    cd ecommerce-dashboard
+    ```
+
+2. **Install Dependencies**
+
+    ```bash
+    npm install
+    ```
+
+3. **Run the Dashboard Locally**
+
+    ```bash
+    npm start
+    ```
+
+    The dashboard will be available at `http://localhost:3000`.
+
+## Dependencies
+
+- React
+- Chart.js (or your chosen charting library)
+- [List any other dependencies here]
+
+## Navigating the Dashboard
+
+- **Dashboard Home:** View key metrics and charts.
+- **Orders:** Browse and filter order data.
+- **Customers:** Analyze customer information.
+- **Products:** Review product performance.
+
+Use the sidebar or navigation menu to switch between sections.
+
+## Sample Data
+
+The dashboard is pre-populated with sample data for demonstration purposes. You can modify or replace this data in the `/data` directory.
+
+## License
+
+[MIT](LICENSE)

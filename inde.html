@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>E-Commerce Admin Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Vue.js CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- AG Grid CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-grid.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ag-grid-community/styles/ag-theme-alpine.css" />
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.noStyle.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: #f4f6fa; }
+        header { background: #2d3748; color: #fff; padding: 1rem 2rem; font-size: 1.5rem; }
+        nav { background: #fff; display: flex; gap: 2rem; padding: 1rem 2rem; border-bottom: 1px solid #e2e8f0; }
+        nav button { background: none; border: none; font-size: 1rem; cursor: pointer; color: #2d3748; }
+        nav button.active { color: #3182ce; border-bottom: 2px solid #3182ce; }
+        .container { max-width: 1200px; margin: 2rem auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 2rem; }
+        .dashboard-cards { display: flex; gap: 2rem; margin-bottom: 2rem; }
+        .card { background: #f7fafc; border-radius: 8px; padding: 1.5rem; flex: 1; box-shadow: 0 1px 4px #0001; }
+        .card h3 { margin: 0 0 0.5rem 0; font-size: 1.1rem; color: #4a5568; }
+        .card .value { font-size: 2rem; font-weight: bold; color: #2d3748; }
+        .charts { display: flex; gap: 2rem; }
+        .charts canvas { background: #fff; border-radius: 8px; }
+        .ag-theme-alpine { height: 400px; width: 100%; margin-bottom: 2rem; }
+        .low-inventory { color: #e53e3e; font-weight: bold; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.3rem; color: #4a5568; }
+        .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; }
+        .form-group input[type="file"] { padding: 0; }
+        .btn { background: #3182ce; color: #fff; border: none; padding: 0.7rem 1.5rem; border-radius: 4px; cursor: pointer; }
+        .btn:disabled { background: #a0aec0; }
+        .alert { background: #fff3cd; color: #856404; padding: 0.7rem 1rem; border-radius: 4px; margin-bottom: 1rem; }
+        @media (max-width: 900px) {
+            .dashboard-cards, .charts { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header>E-Commerce Admin Dashboard</header>
+        <nav>
+            <button :class="{active: page==='revenue'}" @click="page='revenue'">Revenue Analysis</button>
+            <button :class="{active: page==='inventory'}" @click="page='inventory'">Inventory Management</button>
+            <button :class="{active: page==='register'}" @click="page='register'">Product Registration</button>
+        </nav>
+        <div class="container">
+            <!-- Revenue Analysis Page -->
+            <div v-if="page==='revenue'">
+                <div class="dashboard-cards">
+                    <div class="card">
+                        <h3>Total Orders</h3>
+                        <div class="value">{{ totalOrders }}</div>
+                    </div>
+                    <div class="card">
+                        <h3>Total Revenue</h3>
+                        <div class="value">${{ totalRevenue.toLocaleString() }}</div>
+                    </div>
+                </div>
+                <div style="margin-bottom:1rem;">
+                    <label>Filter by Category:
+                        <select v-model="selectedCategory" @change="updateRevenueCharts">
+                            <option value="">All</option>
+                            <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                        </select>
+                    </label>
+                    <label style="margin-left:2rem;">Time Range:
+                        <select v-model="selectedRange" @change="updateRevenueCharts">
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="annually">Annually</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="charts">
+                    <div style="flex:1;">
+                        <canvas id="ordersChart"></canvas>
+                    </div>
+                    <div style="flex:1;">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <!-- Inventory Management Page -->
+            <div v-if="page==='inventory'">
+                <div class="alert" v-if="lowInventoryProducts.length">
+                    <strong>Low Inventory Alert:</strong>
+                    <span v-for="p in lowInventoryProducts" :key="p.id" class="low-inventory">
+                        {{ p.name }} ({{ p.stock }} left)
+                    </span>
+                </div>
+                <div style="margin-bottom:1rem;">
+                    <input type="text" v-model="inventorySearch" placeholder="Search products..." style="width:200px;"/>
+                    <label style="margin-left:1rem;">Filter by Category:
+                        <select v-model="inventoryCategory">
+                            <option value="">All</option>
+                            <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="ag-theme-alpine" id="inventoryGrid"></div>
+            </div>
+            <!-- Product Registration Page -->
+            <div v-if="page==='register'">
+                <form @submit.prevent="registerProduct">
+                    <div class="form-group">
+                        <label>Product Name</label>
+                        <input v-model="newProduct.name" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea v-model="newProduct.description" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select v-model="newProduct.category" required>
+                            <option value="">Select</option>
+                            <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Price ($)</label>
+                        <input type="number" v-model.number="newProduct.price" min="0" step="0.01" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Initial Stock Level</label>
+                        <input type="number" v-model.number="newProduct.stock" min="0" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Product Image</label>
+                        <input type="file" @change="onImageChange" accept="image/*" />
+                        <div v-if="newProduct.imageUrl">
+                            <img :src="newProduct.imageUrl" alt="Preview" style="max-width:100px; margin-top:0.5rem;" />
+                        </div>
+                    </div>
+                    <button class="btn" type="submit" :disabled="registering">Add Product</button>
+                </form>
+                <div v-if="registerSuccess" class="alert" style="background:#d4edda;color:#155724;">
+                    Product added successfully!
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Sample data for products, sales, and inventory
+        const sampleProducts = [
+            { id: 1, name: "Echo Dot", description: "Smart speaker with Alexa", category: "Electronics", price: 49.99, stock: 12, imageUrl: "", platform: "Amazon" },
+            { id: 2, name: "Instant Pot", description: "7-in-1 Electric Pressure Cooker", category: "Home Appliances", price: 89.99, stock: 5, imageUrl: "", platform: "Amazon" },
+            { id: 3, name: "Apple AirPods", description: "Wireless Earbuds", category: "Electronics", price: 129.99, stock: 20, imageUrl: "", platform: "Walmart" },
+            { id: 4, name: "Yoga Mat", description: "Non-slip Exercise Mat", category: "Sports", price: 19.99, stock: 2, imageUrl: "", platform: "Walmart" },
+            { id: 5, name: "Coffee Maker", description: "12-Cup Programmable", category: "Home Appliances", price: 39.99, stock: 8, imageUrl: "", platform: "Amazon" },
+            { id: 6, name: "LED Monitor", description: "24-inch Full HD", category: "Electronics", price: 159.99, stock: 4, imageUrl: "", platform: "Walmart" }
+        ];
+        // Sample sales data: {date, productId, quantity, revenue}
+        const sampleSales = [
+            // Daily sales for the last 14 days for each product
+            ...Array.from({length: 14}, (_, i) => {
+                const date = new Date();
+                date.setDate(date.getDate() - (13 - i));
+                return [
+                    { date: date.toISOString().slice(0,10), productId: 1, quantity: Math.floor(Math.random()*3+1), revenue: 49.99 },
+                    { date: date.toISOString().slice(0,10), productId: 2, quantity: Math.floor(Math.random()*2+1), revenue: 89.99 },
+                    { date: date.toISOString().slice(0,10), productId: 3, quantity: Math.floor(Math.random()*4+1), revenue: 129.99 },
+                    { date: date.toISOString().slice(0,10), productId: 4, quantity: Math.floor(Math.random()*2+1), revenue: 19.99 },
+                    { date: date.toISOString().slice(0,10), productId: 5, quantity: Math.floor(Math.random()*3+1), revenue: 39.99 },
+                    { date: date.toISOString().slice(0,10), productId: 6, quantity: Math.floor(Math.random()*2+1), revenue: 159.99 }
+                ];
+            }).flat()
+        ];
+
+        const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                // State
+                const page = ref('revenue');
+                const products = ref([...sampleProducts]);
+                const sales = ref([...sampleSales]);
+                const categories = computed(() => [...new Set(products.value.map(p => p.category))]);
+                // Revenue Analysis
+                const selectedCategory = ref('');
+                const selectedRange = ref('daily');
+                const totalOrders = computed(() => {
+                    return filteredSales().reduce((sum, s) => sum + s.quantity, 0);
+                });
+                const totalRevenue = computed(() => {
+                    return filteredSales().reduce((sum, s) => sum + s.quantity * s.revenue, 0);
+                });
+                // Inventory Management
+                const inventorySearch = ref('');
+                const inventoryCategory = ref('');
+                const lowInventoryProducts = computed(() =>
+                    products.value.filter(p => p.stock <= 5)
+                );
+                // Product Registration
+                const newProduct = reactive({
+                    name: '', description: '', category: '', price: 0, stock: 0, imageUrl: ''
+                });
+                const registering = ref(false);
+                const registerSuccess = ref(false);
+
+                // Helper: Filtered sales by category
+                function filteredSales() {
+                    if (!selectedCategory.value) return sales.value;
+                    const ids = products.value.filter(p => p.category === selectedCategory.value).map(p => p.id);
+                    return sales.value.filter(s => ids.includes(s.productId));
+                }
+
+                // Chart.js instances
+                let ordersChart, revenueChart;
+
+                // Chart Data Preparation
+                function getChartData(range) {
+                    // Group sales by date (or week/month/year)
+                    const groupBy = {};
+                    filteredSales().forEach(s => {
+                        let key = s.date;
+                        if (range === 'weekly') key = s.date.slice(0,7) + ' W' + (Math.ceil(Number(s.date.slice(8,10))/7));
+                        if (range === 'monthly') key = s.date.slice(0,7);
+                        if (range === 'annually') key = s.date.slice(0,4);
+                        if (!groupBy[key]) groupBy[key] = { orders: 0, revenue: 0 };
+                        groupBy[key].orders += s.quantity;
+                        groupBy[key].revenue += s.quantity * s.revenue;
+                    });
+                    const labels = Object.keys(groupBy).sort();
+                    const orders = labels.map(l => groupBy[l].orders);
+                    const revenues = labels.map(l => groupBy[l].revenue);
+                    return { labels, orders, revenues };
+                }
+
+                function updateRevenueCharts() {
+                    const { labels, orders, revenues } = getChartData(selectedRange.value);
+                    if (ordersChart) {
+                        ordersChart.data.labels = labels;
+                        ordersChart.data.datasets[0].data = orders;
+                        ordersChart.update();
+                    }
+                    if (revenueChart) {
+                        revenueChart.data.labels = labels;
+                        revenueChart.data.datasets[0].data = revenues;
+                        revenueChart.update();
+                    }
+                }
+
+                // AG Grid for Inventory
+                let gridOptions;
+                function updateInventoryGrid() {
+                    const filterText = inventorySearch.value.toLowerCase();
+                    let filtered = products.value;
+                    if (inventoryCategory.value) {
+                        filtered = filtered.filter(p => p.category === inventoryCategory.value);
+                    }
+                    if (filterText) {
+                        filtered = filtered.filter(p =>
+                            p.name.toLowerCase().includes(filterText) ||
+                            p.description.toLowerCase().includes(filterText)
+                        );
+                    }
+                    gridOptions.api.setRowData(filtered);
+                }
+
+                function onInventoryCellValueChanged(event) {
+                    const { data, colDef, newValue } = event;
+                    if (colDef.field === 'stock') {
+                        const prod = products.value.find(p => p.id === data.id);
+                        if (prod) prod.stock = Number(newValue);
+                    }
+                }
+
+                // Product Registration
+                function onImageChange(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = function(evt) {
+                        newProduct.imageUrl = evt.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+
+                function registerProduct() {
+                    registering.value = true;
+                    setTimeout(() => {
+                        const id = Math.max(...products.value.map(p => p.id)) + 1;
+                        products.value.push({
+                            id,
+                            name: newProduct.name,
+                            description: newProduct.description,
+                            category: newProduct.category,
+                            price: newProduct.price,
+                            stock: newProduct.stock,
+                            imageUrl: newProduct.imageUrl,
+                            platform: "Amazon"
+                        });
+                        // Optionally, add a sales entry for today with 0 sales
+                        sales.value.push({
+                            date: new Date().toISOString().slice(0,10),
+                            productId: id,
+                            quantity: 0,
+                            revenue: newProduct.price
+                        });
+                        // Reset form
+                        Object.assign(newProduct, { name: '', description: '', category: '', price: 0, stock: 0, imageUrl: '' });
+                        registering.value = false;
+                        registerSuccess.value = true;
+                        setTimeout(() => registerSuccess.value = false, 2000);
+                        updateInventoryGrid();
+                        updateRevenueCharts();
+                    }, 800);
+                }
+
+                // Watchers
+                watch([selectedCategory, selectedRange], updateRevenueCharts);
+                watch([inventorySearch, inventoryCategory], updateInventoryGrid);
+                watch(products, () => {
+                    updateInventoryGrid();
+                    updateRevenueCharts();
+                });
+
+                // On mount: initialize charts and grid
+                onMounted(() => {
+                    // Orders Chart
+                    ordersChart = new Chart(document.getElementById('ordersChart').getContext('2d'), {
+                        type: 'line',
+                        data: { labels: [], datasets: [{ label: 'Orders', data: [], borderColor: '#3182ce', fill: false }] },
+                        options: { responsive: true, plugins: { legend: { display: false } } }
+                    });
+                    // Revenue Chart
+                    revenueChart = new Chart(document.getElementById('revenueChart').getContext('2d'), {
+                        type: 'bar',
+                        data: { labels: [], datasets: [{ label: 'Revenue', data: [], backgroundColor: '#90cdf4' }] },
+                        options: { responsive: true, plugins: { legend: { display: false } } }
+                    });
+                    updateRevenueCharts();
+
+                    // AG Grid
+                    gridOptions = {
+                        columnDefs: [
+                            { headerName: "Product", field: "name", sortable: true, filter: true, flex: 1 },
+                            { headerName: "Category", field: "category", sortable: true, filter: true, flex: 1 },
+                            { headerName: "Price ($)", field: "price", sortable: true, filter: true, flex: 1, valueFormatter: p => p.value.toFixed(2) },
+                            { headerName: "Stock", field: "stock", editable: true, sortable: true, filter: true, flex: 1, cellClass: p => p.value <= 5 ? 'low-inventory' : '' },
+                            { headerName: "Platform", field: "platform", flex: 1 },
+                            { headerName: "Image", field: "imageUrl", flex: 1, cellRenderer: p => p.value ? `<img src="${p.value}" style="max-width:40px;"/>` : '' }
+                        ],
+                        rowData: products.value,
+                        onCellValueChanged: onInventoryCellValueChanged,
+                        domLayout: 'autoHeight',
+                        defaultColDef: { resizable: true }
+                    };
+                    new agGrid.Grid(document.getElementById('inventoryGrid'), gridOptions);
+                });
+
+                return {
+                    page, products, sales, categories,
+                    selectedCategory, selectedRange, totalOrders, totalRevenue,
+                    inventorySearch, inventoryCategory, lowInventoryProducts,
+                    newProduct, registering, registerSuccess,
+                    onImageChange, registerProduct
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
